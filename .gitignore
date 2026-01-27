@@ -1,0 +1,9 @@
+# Ignore Python, Jupyter, and environment files
+.venv
+.DS_Store
+__pycache__/
+ipynb_checkpoints/
+.vscode/
+
+# Ignore data
+xray_data/

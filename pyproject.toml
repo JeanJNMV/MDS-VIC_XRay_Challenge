@@ -1,0 +1,15 @@
+[project]
+name = "mds-vic-xray-challenge"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.2.6",
+    "pandas>=2.3.3",
+    "scikit-image>=0.25.2",
+    "scikit-learn>=1.7.2",
+    "scipy>=1.15.3",
+]
