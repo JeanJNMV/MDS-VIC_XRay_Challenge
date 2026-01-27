@@ -63,7 +63,7 @@ class XRayDataset(Dataset):
                         )
 
         # labels = torch.tensor(labels) if labels else torch.zeros((0, 5))
-        labels = np.array(labels)
+        labels = np.array(labels) if labels else np.array([]).reshape(0, 5)
 
         # Resize image if needed
         if self.resize:
