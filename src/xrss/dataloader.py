@@ -53,7 +53,13 @@ class XRayDataset:
                        in normalized YOLO format (empty array if no labels exist).
     """
 
-    def __init__(self, yaml_file: str, split: str = "train", img_size: int = 416):
+    def __init__(
+        self,
+        yaml_file: str,
+        split: str = "train",
+        resize: bool = False,
+        img_size: int = 416,
+    ):
         # Load yaml file
         with open(yaml_file, "r") as f:
             cfg = yaml.safe_load(f)
@@ -62,7 +68,8 @@ class XRayDataset:
         yaml_dir = os.path.dirname(yaml_file)
         self.root = yaml_dir
         self.split = split
-        self.img_size = img_size
+        self.resize = resize
+        self.img_size = img_size if resize else None
         self.mapping = {i: name for i, name in enumerate(cfg["names"])}
         self.nc = cfg["nc"]
 
@@ -109,7 +116,8 @@ class XRayDataset:
         labels = np.array(labels) if labels else np.array([]).reshape(0, 5)
 
         # Resize image
-        img = img.resize((self.img_size, self.img_size))
+        if self.resize:
+            img = img.resize((self.img_size, self.img_size))
 
         return img, labels
 

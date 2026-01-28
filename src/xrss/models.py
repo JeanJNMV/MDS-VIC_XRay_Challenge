@@ -38,7 +38,6 @@ class MetalMaskRandomForest:
         self.model = RandomForestClassifier(
             n_estimators=100, class_weight="balanced", random_state=42
         )
-        self.img_size = 416
 
         # HSV & Detection Parameters
         self.lower_blue = np.array([90, 50, 50])
@@ -68,7 +67,6 @@ class MetalMaskRandomForest:
 
     def train(self, dataset):
         print(f"Training on {len(dataset)} images.")
-        self.img_size = dataset.img_size
         X_train = []
         y_train = []
 
@@ -138,8 +136,8 @@ class MetalMaskRandomForest:
             x, y, w, h = cv2.boundingRect(cnt)
 
             # Normalize
-            norm_w = w / self.img_size
-            norm_h = h / self.img_size
+            norm_w = w / img.shape[1]
+            norm_h = h / img.shape[0]
             norm_area = norm_w * norm_h
 
             # Filters
@@ -154,8 +152,8 @@ class MetalMaskRandomForest:
             features = [[aspect_ratio, norm_area, solidity]]
             pred_class = int(self.model.predict(features)[0])
 
-            norm_xc = (x + w / 2) / self.img_size
-            norm_yc = (y + h / 2) / self.img_size
+            norm_xc = (x + w / 2) / img.shape[1]
+            norm_yc = (y + h / 2) / img.shape[0]
             predictions.append([pred_class, norm_xc, norm_yc, norm_w, norm_h])
 
         return predictions

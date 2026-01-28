@@ -41,10 +41,10 @@ def compute_iou(a, b):
 def evaluate_score(model, dataset):
     """Evaluate the model on the dataset and return the average IoU-based score."""
     frame_scores = []
-    img_w = img_h = dataset.img_size
 
     for i in tqdm(range(len(dataset))):
         img, gt_labels = dataset[i]
+        img_h, img_w = img.shape[:2]
 
         pred_labels = model.detect(img)
 
