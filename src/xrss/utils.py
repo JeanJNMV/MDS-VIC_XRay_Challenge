@@ -1,5 +1,8 @@
 import numpy as np
 from tqdm import tqdm
+import os
+import pandas as pd
+from pathlib import Path
 
 
 def yolo_to_xyxy(box, img_w, img_h):
@@ -92,3 +95,50 @@ def evaluate_score(model, dataset):
         frame_scores.append(frame_score)
 
     return np.mean(frame_scores)
+
+
+def compute_predictions_folder(
+    model, dataset, output_folder="./predictions", replace=True
+):
+    """Compute predictions for all images in the dataset and save them to the output folder in YOLO format."""
+    os.makedirs(output_folder, exist_ok=True)
+
+    for i in tqdm(range(len(dataset))):
+        img, _ = dataset[i]
+        preds = model.detect(img)
+
+        # Determine output file path
+        img_name = os.path.splitext(os.path.basename(dataset.img_files[i]))[0]
+        pred_file = os.path.join(output_folder, img_name + ".txt")
+
+        # Check if file exists
+        if os.path.exists(pred_file) and not replace:
+            print(f"File {pred_file} already exists.")
+            continue
+
+        # Write predictions
+        if len(preds) > 0:
+            np.savetxt(pred_file, preds, fmt=["%d", "%.6f", "%.6f", "%.6f", "%.6f"])
+        else:
+            # Save empty file if no predictions
+            open(pred_file, "w").close()
+
+
+def yolo_to_submission_csv(yolo_dir, output_csv):
+    """Convert YOLO format txt files to submission CSV."""
+    data = []
+
+    for txt_file in sorted(Path(yolo_dir).glob("*.txt")):
+        frame_id = txt_file.stem  # filename without extension
+        boxes = []
+
+        with open(txt_file, "r") as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 5:
+                    cls, cx, cy, w, h = map(float, parts)
+                    boxes.append([int(cls), cx, cy, w, h])
+
+        data.append({"frame_id": frame_id, "bbs": str(boxes)})
+
+    pd.DataFrame(data).to_csv(output_csv, index=False)
