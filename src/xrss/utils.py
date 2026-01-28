@@ -104,9 +104,6 @@ def compute_predictions_folder(
     os.makedirs(output_folder, exist_ok=True)
 
     for i in tqdm(range(len(dataset))):
-        img, _ = dataset[i]
-        preds = model.detect(img)
-
         # Determine output file path
         img_name = os.path.splitext(os.path.basename(dataset.img_files[i]))[0]
         pred_file = os.path.join(output_folder, img_name + ".txt")
@@ -115,6 +112,9 @@ def compute_predictions_folder(
         if os.path.exists(pred_file) and not replace:
             print(f"File {pred_file} already exists.")
             continue
+
+        img, _ = dataset[i]
+        preds = model.detect(img)
 
         # Write predictions
         if len(preds) > 0:
