@@ -18,6 +18,7 @@ class XRayDataset:
     Attributes:
         root (str): Root directory path derived from the YAML file location.
         split (str): Dataset split identifier (e.g., 'train', 'val', 'test').
+        resize (bool): Flag indicating whether to resize images.
         img_size (int): Target image size for resizing (assumes square images).
         mapping (dict): Dictionary mapping class IDs to class names from config.
         nc (int): Number of classes in the dataset.
@@ -26,31 +27,8 @@ class XRayDataset:
         img_dir (str): Path to the images directory for the specified split.
 
     Methods:
-        __init__(yaml_file, split="train", img_size=416):
-            Initialize the dataset by loading configuration from a YAML file and
-            discovering images in the specified split directory.
-
-            Args:
-                yaml_file (str): Path to YAML configuration file containing dataset paths and class names.
-                split (str): Dataset split name (default: "train").
-                img_size (int): Target size for image resizing in pixels (default: 416).
-
-        __len__():
-            Return the total number of images in the dataset.
-
-            Returns:
-                int: Number of image files in the dataset.
-
-        __getitem__(idx):
-            Load and return an image and its corresponding labels.
-
-            Args:
-                idx (int): Index of the sample to retrieve.
-
-            Returns:
-                tuple: (PIL.Image, np.ndarray) where the image is RGB format resized to img_size
-                       and labels is an Nx5 array with columns [class_id, x_center, y_center, width, height]
-                       in normalized YOLO format (empty array if no labels exist).
+        __len__(): Returns the number of images in the dataset.
+        __getitem__(idx): Retrieves the image and its corresponding labels at the specified index.
     """
 
     def __init__(

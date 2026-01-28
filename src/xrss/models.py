@@ -168,6 +168,12 @@ class PixelTemplateMatching:
         custom_threshold (dict): Optional per-class thresholds, e.g. {5: 0.98}.
         max_templates (int): Maximum number of templates to extract per class.
         nms_threshold (float): NMS IoU threshold.
+        custom_threshold (dict): Optional dictionary specifying class-specific thresholds.
+
+    Methods:
+        get_threshold_for_class(cls_id): Returns the threshold for a specific class.
+        train(dataset): Extracts templates from the training dataset.
+        detect(img): Detects objects in the input image using template matching and NMS.
     """
 
     def __init__(
