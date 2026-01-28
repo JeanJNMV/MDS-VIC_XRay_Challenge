@@ -1,13 +1,13 @@
 import os
 import yaml
-from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
+import math
 
 
-class XRayDataset(Dataset):
+class XRayDataset:
     def __init__(self, yaml_file, split="train", resize=True, img_size=416):
         # Load yaml file
         with open(yaml_file, "r") as f:
@@ -69,25 +69,26 @@ class XRayDataset(Dataset):
         if self.resize:
             img = img.resize((self.img_size, self.img_size))
 
-        # Convert image to tensor
-        # img = torch.tensor(np.array(img)).permute(2, 0, 1).float() / 255.0
-
         return img, labels
 
 
-def show_image_and_labels(dataset, index):
+def plot_image_on_axis(dataset, index, ax):
     img, labels = dataset[index]
 
     if not isinstance(img, np.ndarray):
         img = np.array(img)
 
-    fig, ax = plt.subplots(1, figsize=(8, 8))
     ax.imshow(img)
 
     if labels.size > 0:
         for label in labels:
             class_id, x_center, y_center, width, height = label
-            class_name = dataset.mapping[int(class_id)]
+
+            # Retrieve class name if mapping exists
+            if hasattr(dataset, "mapping"):
+                class_name = dataset.mapping[int(class_id)]
+            else:
+                class_name = str(int(class_id))
 
             # YOLO format: x_center, y_center, width, height
             img_h, img_w = img.shape[:2]
@@ -96,11 +97,9 @@ def show_image_and_labels(dataset, index):
             width *= img_w
             height *= img_h
 
-            # Convert to top-left corner
             x1 = x_center - width / 2
             y1 = y_center - height / 2
 
-            # Draw rectangle
             rect = patches.Rectangle(
                 (x1, y1), width, height, linewidth=2, edgecolor="r", facecolor="none"
             )
@@ -108,4 +107,41 @@ def show_image_and_labels(dataset, index):
             ax.text(x1, y1 - 5, class_name, color="yellow", fontsize=12, weight="bold")
 
     ax.axis("off")
-    plt.show()
+
+
+def show_image_and_labels(dataset, index):
+    """
+    Main function to display images.
+    - If index is int: Displays single image.
+    - If index is list: Displays a grid of images (4 columns).
+    """
+
+    # CASE 1: List of indices (Grid View)
+    if isinstance(index, list) or isinstance(index, np.ndarray):
+        num_imgs = len(index)
+        cols = len(index) if num_imgs < 4 else 4
+        rows = math.ceil(num_imgs / cols)
+
+        fig, axes = plt.subplots(rows, cols, figsize=(16, 4 * rows))
+
+        if rows == 1:
+            axes = np.array(axes).flatten()
+        else:
+            axes = axes.flatten()
+
+        for i, ax in enumerate(axes):
+            if i < num_imgs:
+                # Call the helper function for the specific image index
+                plot_image_on_axis(dataset, index[i], ax)
+            else:
+                # Hide unused subplots in the grid
+                ax.axis("off")
+
+        plt.tight_layout()
+        plt.show()
+
+    # CASE 2: Single integer index (Single View)
+    else:
+        fig, ax = plt.subplots(1, figsize=(8, 8))
+        plot_image_on_axis(dataset, index, ax)
+        plt.show()
