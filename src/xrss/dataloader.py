@@ -8,7 +8,7 @@ import math
 
 
 class XRayDataset:
-    def __init__(self, yaml_file, split="train", resize=True, img_size=416):
+    def __init__(self, yaml_file, split="train", img_size=416):
         # Load yaml file
         with open(yaml_file, "r") as f:
             cfg = yaml.safe_load(f)
@@ -17,7 +17,6 @@ class XRayDataset:
         yaml_dir = os.path.dirname(yaml_file)
         self.root = yaml_dir
         self.split = split
-        self.resize = resize
         self.img_size = img_size
         self.mapping = {i: name for i, name in enumerate(cfg["names"])}
         self.nc = cfg["nc"]
@@ -65,83 +64,82 @@ class XRayDataset:
         # labels = torch.tensor(labels) if labels else torch.zeros((0, 5))
         labels = np.array(labels) if labels else np.array([]).reshape(0, 5)
 
-        # Resize image if needed
-        if self.resize:
-            img = img.resize((self.img_size, self.img_size))
+        # Resize image
+        img = img.resize((self.img_size, self.img_size))
 
         return img, labels
 
 
-def plot_image_on_axis(dataset, index, ax):
-    img, labels = dataset[index]
+def show_images_and_bboxes(dataset, images, labels_list, cols=4):
+    # Ensure we are dealing with lists
+    if not isinstance(images, (list, np.ndarray)):
+        images = [images]
+        labels_list = [labels_list]
 
-    if not isinstance(img, np.ndarray):
-        img = np.array(img)
+    num_imgs = len(images)
+    actual_cols = min(num_imgs, cols)
+    rows = math.ceil(num_imgs / actual_cols)
 
-    ax.imshow(img)
+    fig, axes = plt.subplots(rows, actual_cols, figsize=(4 * actual_cols, 4 * rows))
 
-    if labels.size > 0:
-        for label in labels:
-            class_id, x_center, y_center, width, height = label
-
-            # Retrieve class name if mapping exists
-            if hasattr(dataset, "mapping"):
-                class_name = dataset.mapping[int(class_id)]
-            else:
-                class_name = str(int(class_id))
-
-            # YOLO format: x_center, y_center, width, height
-            img_h, img_w = img.shape[:2]
-            x_center *= img_w
-            y_center *= img_h
-            width *= img_w
-            height *= img_h
-
-            x1 = x_center - width / 2
-            y1 = y_center - height / 2
-
-            rect = patches.Rectangle(
-                (x1, y1), width, height, linewidth=2, edgecolor="r", facecolor="none"
-            )
-            ax.add_patch(rect)
-            ax.text(x1, y1 - 5, class_name, color="yellow", fontsize=12, weight="bold")
-
-    ax.axis("off")
-
-
-def show_image_and_labels(dataset, index):
-    """
-    Main function to display images.
-    - If index is int: Displays single image.
-    - If index is list: Displays a grid of images (4 columns).
-    """
-
-    # CASE 1: List of indices (Grid View)
-    if isinstance(index, list) or isinstance(index, np.ndarray):
-        num_imgs = len(index)
-        cols = len(index) if num_imgs < 4 else 4
-        rows = math.ceil(num_imgs / cols)
-
-        fig, axes = plt.subplots(rows, cols, figsize=(16, 4 * rows))
-
-        if rows == 1:
-            axes = np.array(axes).flatten()
-        else:
-            axes = axes.flatten()
-
-        for i, ax in enumerate(axes):
-            if i < num_imgs:
-                # Call the helper function for the specific image index
-                plot_image_on_axis(dataset, index[i], ax)
-            else:
-                # Hide unused subplots in the grid
-                ax.axis("off")
-
-        plt.tight_layout()
-        plt.show()
-
-    # CASE 2: Single integer index (Single View)
+    # Flatten axes for easy iteration, handle single-image case
+    if num_imgs == 1:
+        axes = [axes]
     else:
-        fig, ax = plt.subplots(1, figsize=(8, 8))
-        plot_image_on_axis(dataset, index, ax)
-        plt.show()
+        axes = axes.flatten()
+
+    for i in range(len(axes)):
+        ax = axes[i]
+        if i < num_imgs:
+            img = images[i]
+            labels = np.array(labels_list[i])
+
+            # Convert PIL to numpy if necessary
+            if not isinstance(img, np.ndarray):
+                img = np.array(img)
+
+            ax.imshow(img)
+            img_h, img_w = img.shape[:2]
+
+            if labels.size > 0:
+                for label in labels:
+                    # Support for predicted labels which might have a confidence score [cls, x, y, w, h, conf]
+                    # We only take the first 5 elements for logic
+                    class_id, x_center, y_center, width, height = label[:5]
+
+                    class_name = dataset.mapping.get(int(class_id), str(int(class_id)))
+
+                    # Scale YOLO format (0-1) to pixel values
+                    x_px = x_center * img_w
+                    y_px = y_center * img_h
+                    w_px = width * img_w
+                    h_px = height * img_h
+
+                    x1 = x_px - w_px / 2
+                    y1 = y_px - h_px / 2
+
+                    rect = patches.Rectangle(
+                        (x1, y1),
+                        w_px,
+                        h_px,
+                        linewidth=2,
+                        edgecolor="r",
+                        facecolor="none",
+                    )
+                    ax.add_patch(rect)
+                    ax.text(
+                        x1,
+                        y1 - 5,
+                        class_name,
+                        color="yellow",
+                        fontsize=10,
+                        weight="bold",
+                        backgroundcolor="black",
+                    )
+
+            ax.axis("off")
+        else:
+            ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
