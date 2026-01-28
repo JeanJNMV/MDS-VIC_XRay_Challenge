@@ -3,6 +3,7 @@ from tqdm import tqdm
 
 
 def yolo_to_xyxy(box, img_w, img_h):
+    """Convert a bounding box from YOLO format to [x1, y1, x2, y2] format."""
     _, xc, yc, w, h = box
     x1 = int((xc - w / 2) * img_w)
     y1 = int((yc - h / 2) * img_h)
@@ -12,6 +13,7 @@ def yolo_to_xyxy(box, img_w, img_h):
 
 
 def xyxy_to_yolo(cls, x1, y1, x2, y2, img_w, img_h):
+    """Convert a bounding box from [x1, y1, x2, y2] format to YOLO format."""
     xc = ((x1 + x2) / 2) / img_w
     yc = ((y1 + y2) / 2) / img_h
     w = (x2 - x1) / img_w
@@ -20,6 +22,7 @@ def xyxy_to_yolo(cls, x1, y1, x2, y2, img_w, img_h):
 
 
 def compute_iou(a, b):
+    """Compute Intersection over Union (IoU) between two boxes in [x1, y1, x2, y2] format."""
     x1 = max(a[0], b[0])
     y1 = max(a[1], b[1])
     x2 = min(a[2], b[2])
@@ -33,6 +36,7 @@ def compute_iou(a, b):
 
 
 def evaluate_score(model, dataset):
+    """Evaluate the model on the dataset and return the average IoU-based score."""
     frame_scores = []
     img_w = img_h = dataset.img_size
 
@@ -44,17 +48,16 @@ def evaluate_score(model, dataset):
         num_gt = len(gt_labels)
         num_pred = len(pred_labels)
 
-        # Special Case: Both empty
+        # Both empty
         if num_gt == 0 and num_pred == 0:
             frame_scores.append(1.0)
             continue
 
-        # Special Case: Only one side empty
+        # One empty
         if num_gt == 0 or num_pred == 0:
             frame_scores.append(0.0)
             continue
 
-        # Greedy Matching Logic
         total_iou = 0.0
         used_preds = set()
 

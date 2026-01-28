@@ -8,7 +8,52 @@ import math
 
 
 class XRayDataset:
-    def __init__(self, yaml_file, split="train", img_size=416):
+    """
+    XRayDataset: A dataset class for loading X-ray images and their annotations.
+
+    This class handles loading X-ray images from a directory structure and their corresponding
+    YOLO-format labels. It supports configuration via YAML files and provides image resizing
+    and label parsing functionality.
+
+    Attributes:
+        root (str): Root directory path derived from the YAML file location.
+        split (str): Dataset split identifier (e.g., 'train', 'val', 'test').
+        img_size (int): Target image size for resizing (assumes square images).
+        mapping (dict): Dictionary mapping class IDs to class names from config.
+        nc (int): Number of classes in the dataset.
+        img_files (list): Sorted list of full paths to image files.
+        labels_dir (str or None): Path to labels directory if it exists, None otherwise.
+        img_dir (str): Path to the images directory for the specified split.
+
+    Methods:
+        __init__(yaml_file, split="train", img_size=416):
+            Initialize the dataset by loading configuration from a YAML file and
+            discovering images in the specified split directory.
+
+            Args:
+                yaml_file (str): Path to YAML configuration file containing dataset paths and class names.
+                split (str): Dataset split name (default: "train").
+                img_size (int): Target size for image resizing in pixels (default: 416).
+
+        __len__():
+            Return the total number of images in the dataset.
+
+            Returns:
+                int: Number of image files in the dataset.
+
+        __getitem__(idx):
+            Load and return an image and its corresponding labels.
+
+            Args:
+                idx (int): Index of the sample to retrieve.
+
+            Returns:
+                tuple: (PIL.Image, np.ndarray) where the image is RGB format resized to img_size
+                       and labels is an Nx5 array with columns [class_id, x_center, y_center, width, height]
+                       in normalized YOLO format (empty array if no labels exist).
+    """
+
+    def __init__(self, yaml_file: str, split: str = "train", img_size: int = 416):
         # Load yaml file
         with open(yaml_file, "r") as f:
             cfg = yaml.safe_load(f)
@@ -61,7 +106,6 @@ class XRayDataset:
                             [int(class_id), x_center, y_center, width, height]
                         )
 
-        # labels = torch.tensor(labels) if labels else torch.zeros((0, 5))
         labels = np.array(labels) if labels else np.array([]).reshape(0, 5)
 
         # Resize image
@@ -70,7 +114,23 @@ class XRayDataset:
         return img, labels
 
 
-def show_images_and_bboxes(dataset, images, labels_list, cols=4):
+def show_images_and_bboxes(
+    dataset: XRayDataset, images: list, labels_list: list, cols: int = 4
+):
+    """
+    Displays a grid of images with their corresponding bounding boxes and class labels.
+
+    Args:
+        dataset: An object containing a `mapping` attribute that maps class IDs to class names.
+        images (list or np.ndarray): List or array of images (PIL Images or numpy arrays).
+        labels_list (list): List of bounding box labels for each image. Each label should be in YOLO format:
+            [class_id, x_center, y_center, width, height] (optionally with confidence as a sixth element).
+        cols (int, optional): Number of columns in the grid. Defaults to 4.
+
+    Notes:
+        - Bounding boxes are drawn in red, and class names are displayed above each box in yellow.
+        - Handles both single and multiple images.
+    """
     # Ensure we are dealing with lists
     if not isinstance(images, (list, np.ndarray)):
         images = [images]
