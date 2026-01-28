@@ -6,7 +6,7 @@ from .utils import yolo_to_xyxy, xyxy_to_yolo
 
 
 class TemplateMatching:
-    def __init__(self, threshold=0.90, max_templates_per_class=500, iou_threshold=0.3):
+    def __init__(self, threshold=0.95, max_templates_per_class=500, iou_threshold=0.5):
         self.threshold = threshold
         self.max_templates = max_templates_per_class
         self.iou_threshold = iou_threshold
