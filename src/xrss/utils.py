@@ -110,7 +110,6 @@ def compute_predictions_folder(
 
         # Check if file exists
         if os.path.exists(pred_file) and not replace:
-            print(f"File {pred_file} already exists.")
             continue
 
         img, _ = dataset[i]
