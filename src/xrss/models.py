@@ -164,23 +164,10 @@ class PixelTemplateMatching:
     PixelTemplateMatching is a simple object detection class that uses pixel-level template matching for detection.
 
     Attributes:
-        threshold (float): Similarity threshold for template matching (default: 0.95).
-        max_templates (int): Maximum number of templates to extract per class (default: 500).
-        nms_threshold (float): Non-Maximum Suppression (NMS) threshold to filter overlapping detections (default: 0.5).
-
-    Methods:
-        train(dataset):
-            Extracts up to "max_templates" templates per class from the provided dataset.
-            Each template is a cropped grayscale region of interest corresponding to an object instance.
-            Args:
-                dataset: A dataset object from the class XRayDataset.
-
-        detect(img):
-            Detects objects in the given image using template matching.
-            Args:
-                img: Input image to perform detection on.
-            Returns:
-                List of detections, each in YOLO format [class_id, x_center, y_center, width, height].
+        threshold (float): Default similarity threshold for template matching.
+        custom_threshold (dict): Optional per-class thresholds, e.g. {5: 0.98}.
+        max_templates (int): Maximum number of templates to extract per class.
+        nms_threshold (float): NMS IoU threshold.
     """
 
     def __init__(
@@ -188,26 +175,30 @@ class PixelTemplateMatching:
         threshold: float = 0.95,
         max_templates_per_class: int = 500,
         nms_threshold: float = 0.5,
+        custom_threshold: dict | None = None,
     ):
         self.threshold = threshold
+        self.custom_threshold = custom_threshold or {}
         self.max_templates = max_templates_per_class
         self.nms_threshold = nms_threshold
         self.templates = {}
+
+    def get_threshold_for_class(self, cls_id: int) -> float:
+        """Return class-specific threshold if provided, else default."""
+        return self.custom_threshold.get(cls_id, self.threshold)
 
     def train(self, dataset):
         print(
             f"Extracting up to {self.max_templates} templates per class, from {len(dataset)} images."
         )
-        # Reset templates
+
         for i in range(dataset.nc):
             self.templates[i] = []
 
-        # Shuffle indices to get a random sampling of templates
         indices = np.arange(len(dataset))
         np.random.shuffle(indices)
 
         for idx in tqdm(indices):
-            # Stop if we have enough templates for all classes
             if all(len(t) >= self.max_templates for t in self.templates.values()):
                 break
 
@@ -222,9 +213,9 @@ class PixelTemplateMatching:
 
                 x1, y1, x2, y2 = yolo_to_xyxy(label, w_img, h_img)
 
-                # Safety checks
                 x1, y1 = max(0, x1), max(0, y1)
                 x2, y2 = min(w_img, x2), min(h_img, y2)
+
                 if (x2 - x1) > 15 and (y2 - y1) > 15:
                     template = img[y1:y2, x1:x2]
                     self.templates[cls_id].append(template)
@@ -241,32 +232,34 @@ class PixelTemplateMatching:
         all_scores = []
         all_classes = []
 
-        # Iterate over all templates
         for cls_id, templates in self.templates.items():
+            cls_threshold = self.get_threshold_for_class(cls_id)
+
             for template in templates:
                 h_temp, w_temp = template.shape
 
-                # Skip if template is bigger than the image
                 if h_temp >= h_img or w_temp >= w_img:
                     continue
 
                 res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
 
-                y_loc, x_loc = np.where(res >= self.threshold)
+                y_loc, x_loc = np.where(res >= cls_threshold)
 
-                if len(y_loc) > 0:
-                    scores = res[y_loc, x_loc]
-                    n_hits = len(scores)
+                if len(y_loc) == 0:
+                    continue
 
-                    w_arr = np.full(n_hits, w_temp)
-                    h_arr = np.full(n_hits, h_temp)
-                    cls_arr = np.full(n_hits, cls_id)
+                scores = res[y_loc, x_loc]
+                n_hits = len(scores)
 
-                    current_boxes = np.column_stack((x_loc, y_loc, w_arr, h_arr))
+                w_arr = np.full(n_hits, w_temp)
+                h_arr = np.full(n_hits, h_temp)
+                cls_arr = np.full(n_hits, cls_id)
 
-                    all_boxes.append(current_boxes)
-                    all_scores.append(scores)
-                    all_classes.append(cls_arr)
+                boxes = np.column_stack((x_loc, y_loc, w_arr, h_arr))
+
+                all_boxes.append(boxes)
+                all_scores.append(scores)
+                all_classes.append(cls_arr)
 
         if not all_boxes:
             return []
@@ -275,23 +268,29 @@ class PixelTemplateMatching:
         all_scores = np.concatenate(all_scores)
         all_classes = np.concatenate(all_classes)
 
-        # Apply Non-Maximum Suppression
+        # Use the minimum threshold for NMS (safe lower bound)
+        nms_score_threshold = min(
+            [self.threshold] + list(self.custom_threshold.values())
+        )
+
         indices = cv2.dnn.NMSBoxes(
             bboxes=all_boxes.tolist(),
             scores=all_scores.tolist(),
-            score_threshold=self.threshold,
+            score_threshold=nms_score_threshold,
             nms_threshold=self.nms_threshold,
         )
 
         predictions = []
         if len(indices) > 0:
             for i in indices.flatten():
-                # Retrieve the box in [x, y, w, h] format
                 x, y, w, h = all_boxes[i]
-                cls_id = all_classes[i]
+                cls_id = int(all_classes[i])
 
-                # Convert to YOLO format
-                yolo_pred = xyxy_to_yolo(int(cls_id), x, y, x + w, y + h, w_img, h_img)
+                # Final safety check (per-class threshold)
+                if all_scores[i] < self.get_threshold_for_class(cls_id):
+                    continue
+
+                yolo_pred = xyxy_to_yolo(cls_id, x, y, x + w, y + h, w_img, h_img)
                 predictions.append(yolo_pred)
 
         return predictions

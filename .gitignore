@@ -10,7 +10,10 @@ ipynb_checkpoints/
 
 # Ignore data
 xray_data/
-
+predictions/
+ 
 # Other ignores
 *test.ipynb
 *test*
+*.pkl
+*copy*
