@@ -71,6 +71,7 @@ class XRayDataset:
         return len(self.img_files)
 
     def __getitem__(self, idx):
+        """Returns the image and labels at the specified index."""
         # Load image
         img_path = self.img_files[idx]
         img = Image.open(img_path).convert("RGB")
