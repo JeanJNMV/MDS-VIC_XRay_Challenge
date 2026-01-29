@@ -44,6 +44,7 @@ def evaluate_score(model, dataset):
 
     for i in tqdm(range(len(dataset))):
         img, gt_labels = dataset[i]
+        img = np.array(img)
         img_h, img_w = img.shape[:2]
 
         pred_labels = model.detect(img)
