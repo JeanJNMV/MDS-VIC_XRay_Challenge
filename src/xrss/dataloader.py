@@ -5,6 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
 import math
+import random
 
 
 class XRayDataset:
@@ -99,6 +100,29 @@ class XRayDataset:
             img = img.resize((self.img_size, self.img_size))
 
         return img, labels
+
+
+class SubsetDataset:
+    """
+    A wrapper class that creates a random subset of a given dataset.
+
+    This class is useful for quickly testing or debugging with a smaller
+    portion of a larger dataset without modifying the original dataset.
+    """
+
+    def __init__(self, dataset, n_samples=50):
+        self.dataset = dataset
+        # Select random indices
+        n = min(n_samples, len(dataset))
+        self.indices = random.sample(range(len(dataset)), n)
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        # Map subset index to original dataset index
+        real_idx = self.indices[idx]
+        return self.dataset[real_idx]
 
 
 def show_images_and_bboxes(
