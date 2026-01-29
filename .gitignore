@@ -11,6 +11,7 @@ ipynb_checkpoints/
 # Ignore data
 xray_data/
 predictions/
+results/
  
 # Other ignores
 *test.ipynb
