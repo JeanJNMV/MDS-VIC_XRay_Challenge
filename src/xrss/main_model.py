@@ -97,6 +97,7 @@ class TwoStageDetector:
         }
         self._train_features = None
 
+    # ------ FEATURE EXTRACTION PART ------
     def _extract_features(self, roi: np.ndarray):
         """Extract HOG, edge, texture and shape features from an ROI."""
         if len(roi.shape) == 3:
@@ -264,6 +265,8 @@ class TwoStageDetector:
 
         return features
 
+    # ----- PROPOSAL GENERATION PART ------
+
     def _generate_proposals(self, img: np.ndarray):
         """Generate object proposals using multiple detection methods."""
         h, w = img.shape[:2]
@@ -429,6 +432,8 @@ class TwoStageDetector:
 
         return [boxes[i] for i in keep]
 
+    # ----- LEARNING CLASS CONSTRAINTS PART -----
+
     def _learn_class_constraints(self, class_stats: Dict):
         """Learn size/shape constraints from training data."""
         for cls_id, stats in class_stats.items():
@@ -468,6 +473,8 @@ class TwoStageDetector:
         if solidity < c["solidity_min"] * 0.6:
             return False
         return True
+
+    # ---- TRAINING PART -----
 
     def train(
         self,
@@ -630,6 +637,8 @@ class TwoStageDetector:
             self.stage2_classifier.fit(X_stage2_scaled, y_objects)
 
         print("\nTraining complete.")
+
+    # ---- DETECTION PART -----
 
     def detect(self, img):
         """Detect objects in the input image using two-stage classification."""
