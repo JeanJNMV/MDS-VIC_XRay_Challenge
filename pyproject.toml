@@ -1,7 +1,7 @@
 [project]
 name = "xrss"
 version = "0.1.0"
-description = "Add your description here"
+description = "[CentraleSupélec] Introduction to Visual Computing Challenge on the detection of dangerous objects in X-Ray images."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
