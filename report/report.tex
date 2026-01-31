@@ -1,0 +1,80 @@
+\documentclass[10pt,a4paper]{article}
+
+% Encoding and language
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+% Graphics and layout
+\usepackage{graphicx}
+\usepackage[top=1in,bottom=1in,left=1in,right=1in]{geometry}
+
+% Spacing
+\linespread{1.06}
+\setlength{\parskip}{8pt plus2pt minus2pt}
+
+% Prevent widows and orphans
+\widowpenalty=10000
+\clubpenalty=10000
+
+% Custom commands
+\newcommand{\eat}[1]{}
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+
+% Utilities
+\usepackage[official]{eurosym}
+\usepackage{enumitem}
+\setlist{noitemsep}
+\usepackage[hidelinks]{hyperref}
+\usepackage{lipsum}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{subcaption}
+
+% Math
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+
+\begin{document}
+\pagenumbering{arabic} % start numbering
+\setcounter{page}{1}
+
+\begin{center}
+    {\Large \bf Introduction to Visual Computing - Assignment 2 Report} \\
+    {\Large \bf X-Ray Security Screening Challenge\footnote{Stelios Perrakis. VIC: Object Detection in Baggage using Classic. https://kaggle.com/competitions/vic-vision-par-ordinateur-object-detection-in-baggage-using-classic, 2026. Kaggle.}}\\
+    {Jean-Vincent Martini}\\
+    \today
+\end{center}
+
+\section{Challenge and Problem Definition}
+
+The challenge consists in developing an automated detection pipeline to identify and localize six specific categories of prohibited items, hammers, knives, guns, wrenches, handcuffs, and bullets, within security scans of luggage. The primary objective is to output precise bounding boxes and class labels for these objects, navigating the visual complexities inherent in X-ray transmission imagery, such as object overlapping and varying densities. The main constraint imposed by the challenge is the prohibition of using deep learning techniques, as the solution must rely solely on classical computer vision methods and machine learning algorithms. The performance of the system is evaluated using a mean Intersection over Union (IoU) metric that incorporates greedy matching, heavily penalizing both false positives and class mismatches to ensure high-precision detection. 
+
+\section{First Attempts at Building a Model}
+
+%Before settling on the final model architecture, several approaches were explored to tackle the problem of detecting the prohibited items in X-ray images.
+
+\subsection{Template Matching-Based Models}
+
+The first major approach involved using a brute-force template matching strategy. This model was designed to act as a "nearest neighbor" detector in the pixel space. During the training phase, the model harvested a bank of reference templates by cropping ground-truth object instances from the training images. For inference, the model performed Normalized Cross-Correlation between the test image and every stored template in the bank. Detections exceeding a similarity threshold were aggregated and filtered using Non-Maximum Suppression (NMS).\\
+While this method provided a foundational understanding of the problem, it suffered from significant limitations. To capture the variability in object appearances, a large number of templates were required, approaching 900 to 1000 per class. This led to high computational costs during inference, making the approach impractical. The model also struggled with smaller objects like bullets, as their templates included substantial background noise, leading to false positives. Despite its large template bank, the model still failed to generalize well to unseen object instances, even when only the confidence threshold of the bullet class was set very high. \\
+We subsequently enhanced this base model by incorporating multi-scale, multi-rotation, and edge-based matching strategies alongside template quality filtering. However, these additions yielded negligible performance gains while drastically increasing inference time.
+
+\subsection{Metal Mask and Random Forest Classifier}
+
+To address the shortcomings of the template matching approach, we changed our strategy to focus on a region-proposal method that leverages the specific color-coding of metallic objects in X-ray images. In this images, metallic items typically appear in shades of blue or gray. Our new model exploited this by applying HSV color thresholding to generate a binary "metal mask", effectively segmenting all high-density regions in the image. Once potential regions of interest were isolated, we extracted three geometric features for each contour: aspect ratio, normalized area, and solidity. These features were fed into a Random Forest classifier to predict the object category.\\
+While this approach drastically reduced inference time by eliminating the need to scan every pixel, it failed to achieve satisfactory detection performance. The color-based segmentation proved far too aggressive, treating every metallic object as a potential threat like zippers, bag studs, and electronic components. Furthermore, the geometric features alone were insufficient for the Random Forest to discriminate between these objects. As a result, the model suffered from a high false-positive rate, frequently classifying small objects like zippers as bullets, and struggled to assign the correct class even when an object of interest was correctly localized.
+
+\section{Final Model Architecture: The Two-Stage Detector}
+
+We chose to implement as our final model a two-stage detection pipeline using Random Forest classifiers. The Template Matching experiment taught us that sliding windows are computationally prohibitive, while the Metal Mask attempt demonstrated that relying solely on color yields poor class separability. Thus, our final architecture is composed of Region Proposal and Classification stages, similar to the logic behind R-CNN, but using only classical computer vision techniques. \\
+Instead of scanning every pixel, the model first generates a set of "candidate" bounding boxes. To ensure no object is missed, we employ an ensemble of five distinct segmentation techniques: Multi-Thresholding, Percentile Thresholding (captures objects at various intensity levels), CLAHE (enhances local contrast to find objects in dark and dense areas), Adaptive Thresholding (handles varying background gradients) and MSER (effective for detecting consistent regions of interest). These methods collectively generate a large pool of proposals which are then filtered via NMS to remove duplicates. \\
+For every candidate region, we extract a rich dimensional feature vector designed to capture the unique signature of prohibited items. We rely on: HOG (captures the shape and edge structure), Texture Descriptors (uses Local Binary Patterns and intensity histograms), Geometric Features (Hu Moments, solidity, aspect ratio, and convexity), Edge Statistics (canny edge density and Hough Line transforms). \\
+These features are standardized and passed to two distinct Random Forest classifiers. The first stage classifier is a binary model simply trained to distinguish between "prohibited item" and "background", acting as a filter to discard unlikely candidates. The second stage classifier is a multi-class model that assigns one of the six classes to the remaining candidates. This stage incorporates class-specific confidence thresholds and learned geometric constraints to further refine predictions. \\
+The primary strength of this architecture is its robustness. By combining multiple proposal methods, we minimize the risk of missing objects, while the rich feature set ensures effective class separation. However, the model's main weakness lies in its parametrc complexity. The entire pipeline involves numerous hyperparameters across proposal generation, feature extraction, and classification stages, necessitating extensive tuning to achieve optimal performance. This is particularly challenging given the computational cost of evaluating which, despite being much lower than the template matching approach, remains significant (approximately 18 minutes on the full validation set).
+
+
+\end{document} 
