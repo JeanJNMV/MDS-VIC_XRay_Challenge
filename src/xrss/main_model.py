@@ -36,13 +36,18 @@ class TwoStageDetector:
         nc: int = 6,
         max_reject_samples: int = 15000,
         stage1_threshold: float = 0.45,
-        n_estimators: int = 200,
-        class_thresholds: dict | None = None,
+        stage1_n_estimators: int = 200,
+        stage1_max_depth: int = 15,
+        stage2_class_thresholds: dict | None = None,
         stage2_class_weights: dict | None = None,
+        stage2_n_estimators: int = 200,
+        stage2_max_depth: int = 20,
     ):
-        self.nc = nc
-        self.max_reject_samples = max_reject_samples
-        self.stage1_threshold = stage1_threshold
+        # Feature extractor parameters
+        self._roi_size = (64, 64)
+        self._lbp_radius = 3
+        self._lbp_n_points = 24
+        self._intensity_bins = 16
 
         # Proposal generator parameters
         self._min_area = 200
@@ -50,16 +55,13 @@ class TwoStageDetector:
         self._nms_threshold = 0.5
         self._max_proposals = 100
 
-        # Feature extractor parameters
-        self._roi_size = (64, 64)
-        self._lbp_radius = 3
-        self._lbp_n_points = 24
-        self._intensity_bins = 16
-
         # Stage 1: Binary classifier (Object vs Background)
+        self.max_reject_samples = max_reject_samples
+        self.stage1_threshold = stage1_threshold
+
         self.stage1_classifier = RandomForestClassifier(
-            n_estimators=n_estimators,
-            max_depth=15,
+            n_estimators=stage1_n_estimators,
+            max_depth=stage1_max_depth,
             min_samples_split=10,
             class_weight="balanced",
             random_state=42,
@@ -67,6 +69,7 @@ class TwoStageDetector:
         )
 
         # Stage 2: Multi-class classifier
+        self.nc = nc
         self.stage2_class_weights = stage2_class_weights or {
             0: 1.2,
             1: 1.2,
@@ -76,8 +79,8 @@ class TwoStageDetector:
             5: 3.0,
         }
         self.stage2_classifier = RandomForestClassifier(
-            n_estimators=n_estimators,
-            max_depth=20,
+            n_estimators=stage2_n_estimators,
+            max_depth=stage2_max_depth,
             min_samples_split=5,
             class_weight=self.stage2_class_weights,
             random_state=42,
@@ -87,7 +90,7 @@ class TwoStageDetector:
         self.scaler1 = StandardScaler()
         self.scaler2 = StandardScaler()
         self.class_constraints = {}
-        self.class_thresholds = class_thresholds or {
+        self.class_thresholds = stage2_class_thresholds or {
             0: 0.70,
             1: 0.55,
             2: 0.40,
@@ -98,6 +101,7 @@ class TwoStageDetector:
         self._train_features = None
 
     # ------ FEATURE EXTRACTION PART ------
+
     def _extract_features(self, roi: np.ndarray):
         """Extract HOG, edge, texture and shape features from an ROI."""
         if len(roi.shape) == 3:
@@ -276,12 +280,9 @@ class TwoStageDetector:
         all_proposals = []
         all_proposals.extend(self._multi_threshold_intensity(gray, max_area))
         all_proposals.extend(self._percentile_based_detection(gray, max_area))
-        all_proposals.extend(self._edge_detection(gray, max_area))
-        all_proposals.extend(self._gradient_based_detection(gray, max_area))
         all_proposals.extend(self._clahe_detection(gray, max_area))
         all_proposals.extend(self._adaptive_threshold_detection(gray, max_area))
         all_proposals.extend(self._mser_detection(gray, max_area))
-        all_proposals.extend(self._inverted_intensity_detection(gray, max_area))
 
         if all_proposals:
             all_proposals = self._apply_proposal_nms(all_proposals)
@@ -325,31 +326,6 @@ class TwoStageDetector:
             thresh = np.percentile(gray, percentile)
             _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY_INV)
             binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-            proposals.extend(self._extract_contours(binary, max_area))
-        return proposals
-
-    def _edge_detection(self, gray: np.ndarray, max_area: float):
-        proposals = []
-        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-        for low, high in [(10, 50), (20, 80), (30, 100), (50, 150)]:
-            edges = cv2.Canny(blurred, low, high)
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
-            dilated = cv2.dilate(edges, kernel, iterations=3)
-            closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel)
-            proposals.extend(self._extract_contours(closed, max_area))
-        return proposals
-
-    def _gradient_based_detection(self, gray: np.ndarray, max_area: float):
-        proposals = []
-        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        magnitude = np.sqrt(sobelx**2 + sobely**2)
-        magnitude = (magnitude / magnitude.max() * 255).astype(np.uint8)
-        for thresh in [20, 40, 60]:
-            _, binary = cv2.threshold(magnitude, thresh, 255, cv2.THRESH_BINARY)
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-            binary = cv2.dilate(binary, kernel, iterations=2)
             binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
             proposals.extend(self._extract_contours(binary, max_area))
         return proposals
@@ -401,16 +377,6 @@ class TwoStageDetector:
             pass
         return proposals
 
-    def _inverted_intensity_detection(self, gray: np.ndarray, max_area: float):
-        proposals = []
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        for thresh in [180, 200, 220]:
-            _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
-            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-            proposals.extend(self._extract_contours(binary, max_area))
-        return proposals
-
     def _apply_proposal_nms(self, boxes: List[Tuple]):
         """Apply NMS to remove duplicate proposals."""
         if not boxes:
@@ -450,7 +416,9 @@ class TwoStageDetector:
                 "aspect_min": np.percentile(aspects, 5),
                 "aspect_max": np.percentile(aspects, 95),
                 "solidity_min": np.percentile(solidities, 10),
-                "intensity_max": np.percentile(intensities, 95),
+                "solidity_max": np.percentile(solidities, 90),
+                "intensity_min": np.percentile(intensities, 10),
+                "intensity_max": np.percentile(intensities, 90),
             }
 
     def _check_constraints(
@@ -461,17 +429,14 @@ class TwoStageDetector:
             return True
         c = self.class_constraints[cls_id]
 
-        if cls_id == 5:
-            if area < c["area_min"] * 0.5 or area > c["area_max"] * 1.5:
-                return False
-            return True
-
-        if area < c["area_min"] * 0.7 or area > c["area_max"] * 1.3:
+        if area < c["area_min"] * 0.5 or area > c["area_max"] * 1.5:
             return False
-        if aspect < c["aspect_min"] * 0.6 or aspect > c["aspect_max"] * 1.4:
+        if aspect < c["aspect_min"] * 0.5 or aspect > c["aspect_max"] * 1.5:
             return False
-        if solidity < c["solidity_min"] * 0.6:
+        if solidity < c["solidity_min"] * 0.5:  # or solidity > c["solidity_max"] * 1.5:
             return False
+        # if intensity < c["intensity_min"] * 0.5 or intensity > c["intensity_max"] * 1.5:
+        #     return False
         return True
 
     # ---- TRAINING PART -----
