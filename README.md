@@ -111,5 +111,5 @@ The final **Two-Stage Detector** works as follows:
 
 ## Author
 
-Jean-Vincent Martini — CentraleSupélec
+- **Jean-Vincent Martini** - CentraleSupélec
 
